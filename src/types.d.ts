@@ -1,8 +1,5 @@
 export { };
 
 declare global {
-    type Test = {
-        foo: string;
-        bar: number;
-    };
+    type DragableType = "odd" | "even";
 }
