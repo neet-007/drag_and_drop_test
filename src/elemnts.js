@@ -9,8 +9,7 @@ dropDiv.style.height = "1000px";
 dropDiv.style.background = "gray";
 dropDiv.style.border = "1px solid black";
 
-const dropDivRect = dropDiv.getBoundingClientRect();
-
+let dropDivRect = dropDiv.getBoundingClientRect();
 
 export const containerDiv = document.createElement("div");
 containerDiv.id = "containerDiv";
@@ -25,7 +24,11 @@ containerDiv.style.border = "1px solid black";
 export function init() {
     document.body.appendChild(dropDiv);
     document.body.appendChild(containerDiv);
+    dropDivRect = dropDiv.getBoundingClientRect();
 }
+
+/**@type {Dragable[]}*/
+export const bases = [];
 
 /**@type {Dragable[]}*/
 export const parents = [];
@@ -39,6 +42,9 @@ export class Dragable {
     /**@type {HTMLDivElement | null}*/
     elem = null;
 
+    /**@type {boolean}*/
+    isLeaf = false;
+
     /**
      *@constructor
      *@param {DragableType} type 
@@ -46,13 +52,16 @@ export class Dragable {
      *@param {Dragable| null} next
      *@param {string} color
      *@param {boolean} isBase
+     *@param {boolean} firstTime
      */
-    constructor(type, prev, next, color, isBase = false) {
+    constructor(type, prev, next, color, isBase = false, firstTime = false) {
         this.type = type;
         this.prev = prev;
         this.next = next;
         this.color = color;
         this.isBase = isBase;
+        this.isLeaf = false;
+        this.firstTime = firstTime;
 
         this.init = this.init.bind(this);
         this.appendChild = this.appendChild.bind(this);
@@ -70,10 +79,11 @@ export class Dragable {
         elem.onpointerdown = this.dragStart;
         if (isBase) {
             containerDiv.appendChild(elem);
-            elem.style.top = `${parents.length === 0 ? 10 : parents[parents.length - 1].elem.getBoundingClientRect().bottom}`;
-            parents.push(this);
+            elem.style.top = `${bases.length === 0 ? 10 : bases[bases.length - 1].elem.style.bottom.replace("px", "")}px`;
+            elem.style.bottom = `${Number(elem.style.top.replace("px", "")) + elem.getBoundingClientRect().height}px`;
+            bases.push(this);
         } else if (prev === null) {
-            dropDiv.appendChild(elem);
+            containerDiv.appendChild(elem);
         } else {
             prev.elem.appendChild(elem);
         }
@@ -93,21 +103,19 @@ export class Dragable {
     }
 
     removeChild() {
+        if (!this.next) return;
         this.next.prev = null;
-        this.elem.removeChild(this.next.elem);
         this.next = null;
     }
 
     init() {
-        console.log("then here");
         if (!this.isBase) {
             return;
         }
 
-        const clone = new Dragable(this.type, null, null, this.color);
+        const clone = new Dragable(this.type, null, null, this.color, false, true);
         document.addEventListener("pointermove", clone.dragMove);
         document.addEventListener("pointerup", clone.dragEnd);
-
     }
 
     dragStart() {
@@ -123,7 +131,6 @@ export class Dragable {
     * @param {MouseEvent} event 
     */
     dragMove(event) {
-        console.log("here", this.isBase);
         if (this.isBase) {
             return;
         }
@@ -132,15 +139,18 @@ export class Dragable {
         let parentRect = this.elem.getBoundingClientRect();
         this.elem.style.left = `${event.clientX - rect.width / 2}px`;
         this.elem.style.top = `${event.clientY - rect.height / 2}px`;
+        this.elem.style.bottom = `${Number(this.elem.style.top.replace("px", "")) + this.elem.getBoundingClientRect().height}px`;
 
-        let mult = 0;
+        let mult = 1;
         let curr = this.next;
         while (curr !== null) {
             rect = curr.elem.getBoundingClientRect();
-            this.elem.style.left = `${event.clientX - rect.width / 2}px`;
-            this.elem.style.top = `${event.clientY - rect.height / 2 + mult * parentRect.height}px`;
+            curr.elem.style.left = `${event.clientX - rect.width / 2}px`;
+            curr.elem.style.top = `${event.clientY - rect.height / 2 + mult * parentRect.height}px`;
+            curr.elem.style.bottom = `${Number(curr.elem.style.top.replace("px", "")) + curr.elem.getBoundingClientRect().height}px`;
             curr = curr.next;
             parentRect = rect;
+            mult++;
         }
     }
 
@@ -149,27 +159,59 @@ export class Dragable {
             return;
         }
 
+        if (this.firstTime) {
+            console.log("here");
+            containerDiv.removeChild(this.elem);
+            dropDiv.appendChild(this.elem);
+            this.firstTime = false;
+            return;
+        }
+
         const rect = this.elem.getBoundingClientRect();
         if (!isSurrounding(rect, dropDivRect)) {
             if (this.prev) {
-                this.prev.elem.removeChild(this.elem);
+                this.prev.removeChild();
             } else if (parents.includes(this)) {
                 dropDiv.removeChild(this.elem);
             } else {
                 containerDiv.removeChild(this.elem);
             }
         } else {
-            for (let i = 0; i < leaves.length; i++) {
-                const rect2 = leaves[i].elem.getBoundingClientRect();
-                if (isColiding(rect, rect2)) {
-                    leaves[i].appendChild(this);
+            if (this.prev) {
+                if (!isColiding(rect, this.prev.elem.getBoundingClientRect())) {
+                    this.prev.removeChild();
+                } else {
+                    const rect2 = this.prev.elem.getBoundingClientRect();
                     this.elem.style.top = `${rect2.bottom}px`;
                     this.elem.style.left = `${rect2.left}px`;
-                    break;
                 }
             }
-            if (this.prev !== null) {
-                this.prev.removeChild();
+            else {
+                for (let i = 0; i < leaves.length; i++) {
+                    if (this.next === leaves[i]) {
+                        continue;
+                    }
+                    const rect2 = leaves[i].elem.getBoundingClientRect();
+                    if (isColiding(rect, rect2)) {
+                        leaves[i].appendChild(this);
+                        this.elem.style.top = leaves[i].elem.style.bottom;
+                        this.elem.style.left = `${rect2.left}px`;
+
+                        console.log("leavs", [...leaves]);
+                        console.log("parents", [...parents]);
+                        parents.push(leaves[i]);
+                        leaves[i].isLeaf = false;
+                        leaves.splice(i, 1);
+                        console.log("leavs", [...leaves]);
+                        console.log("parents", [...parents]);
+                        break;
+                    }
+                }
+                if (!this.isLeaf && this.next === null) {
+                    leaves.push(this);
+                    this.isLeaf;
+                    console.log("leavs", [...leaves]);
+                }
             }
         }
 
