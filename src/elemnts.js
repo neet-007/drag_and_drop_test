@@ -1,5 +1,45 @@
 import { isColiding, isSurrounding } from "./collision.js";
 
+
+/** @const @readonly */
+const ComponentsEnum = {
+    A: "a",
+    B: "b",
+    C: "c",
+    D: "d",
+};
+
+const typeToType = {
+    "a": {
+        "b": true,
+        "c": false,
+        "d": false,
+    },
+    "b": {
+        "a": true,
+        "c": false,
+        "d": false,
+    },
+    "c": {
+        "a": false,
+        "b": false,
+        "d": true,
+    },
+    "d": {
+        "a": false,
+        "b": false,
+        "c": true,
+    },
+}
+
+/**
+ * @typedef {typeof ComponentsEnum[keyof typeof ComponentsEnum]} ComponentsTypes
+ * ComponentsTypes is now "a" | "b" | "c" | "d"
+ */
+
+/** @type {ComponentsTypes[]} @readonly */
+export const componentsArray = Object.values(ComponentsEnum);
+
 const root = document.getElementById("root");
 
 export const dropDiv = document.createElement("div");
@@ -74,14 +114,16 @@ export class Dragable {
     /**
      *@constructor
      *@param {DragableType} type 
+     *@param {ComponentsTypes} componentType
      *@param {Dragable| null} prev
      *@param {Dragable| null} next
      *@param {string} color
      *@param {boolean} isBase
      *@param {boolean} firstTime
      */
-    constructor(type, prev, next, color, isBase = false, firstTime = false) {
+    constructor(type, componentType, prev, next, color, isBase = false, firstTime = false) {
         this.type = type;
+        this.componentType = componentType;
         this.prev = prev;
         this.next = next;
         this.color = color;
@@ -191,7 +233,7 @@ export class Dragable {
         }
 
         const rect = this.elem.getBoundingClientRect();
-        const clone = new Dragable(this.type, null, null, this.color, false, true);
+        const clone = new Dragable(this.type, this.componentType, null, null, this.color, false, true);
         dropDiv.appendChild(clone.elem);
         clone.coords.x1 = rect.x;
         clone.coords.y1 = rect.y;
@@ -306,7 +348,7 @@ export class Dragable {
                     continue;
                 }
                 const coords2 = leaves[i].coords;
-                if (isColiding(this.coords, coords2)) {
+                if (typeToType[this.componentType][leaves[i].componentType] && isColiding(this.coords, coords2)) {
                     leaves[i].appendChild(this);
                     this.adjustCoords(leaves[i].coords.x1, leaves[i].coords.x1 + this.coords.width,
                         leaves[i].coords.y2, leaves[i].coords.y2 + this.coords.height, true);
