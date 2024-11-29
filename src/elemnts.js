@@ -9,6 +9,31 @@ const ComponentsEnum = {
     D: "d",
 };
 
+/** @const @readonly */
+const ComponentsEnum1 = {
+    A: 0,
+    B: 1,
+    C: 2,
+    D: 3,
+}
+
+const typeToType1 = {
+    [ComponentsEnum1.A]: 0b0000000000000011,
+    [ComponentsEnum1.B]: 0b0000000000000011,
+    [ComponentsEnum1.C]: 0b0000000000001100,
+    [ComponentsEnum1.D]: 0b0000000000001100,
+}
+
+/**
+ *@param {number} parentType 
+ *@param {number} childType 
+ * */
+function canAttach(parentType, childType) {
+    const parentBits = typeToType1[parentType];
+    const childBit = 1 << childType;
+    return (parentBits & childBit) !== 0;
+}
+
 const typeToType = {
     "a": {
         "b": true,
@@ -37,8 +62,8 @@ const typeToType = {
  * ComponentsTypes is now "a" | "b" | "c" | "d"
  */
 
-/** @type {ComponentsTypes[]} @readonly */
-export const componentsArray = Object.values(ComponentsEnum);
+/** @type {number[]} @readonly */
+export const componentsArray = Object.values(ComponentsEnum1);
 
 const root = document.getElementById("root");
 
@@ -114,7 +139,7 @@ export class Dragable {
     /**
      *@constructor
      *@param {DragableType} type 
-     *@param {ComponentsTypes} componentType
+     *@param {number} componentType
      *@param {Dragable| null} prev
      *@param {Dragable| null} next
      *@param {string} color
@@ -152,6 +177,7 @@ export class Dragable {
         elem.style.height = "50px";
         elem.style.background = color;
         elem.style.position = "absolute";
+        elem.style.zIndex = "0";
         elem.onpointerdown = this.dragStart;
         if (isBase) {
             containerDiv.appendChild(elem);
@@ -250,6 +276,12 @@ export class Dragable {
             return;
         }
 
+        /**@type {Dragable}*/
+        let curr = this;
+        while (curr !== null) {
+            curr.elem.style.zIndex = "1";
+            curr = curr.next;
+        }
         document.addEventListener("pointermove", this.dragMove);
         document.addEventListener("pointerup", this.dragEnd);
         handling = true;
@@ -311,6 +343,12 @@ export class Dragable {
     dragEnd(event) {
         handling = false;
 
+        /**@type {Dragable}*/
+        let curr = this;
+        while (curr !== null) {
+            curr.elem.style.zIndex = "0";
+            curr = curr.next;
+        }
         if (this.isBase) {
             return;
         }
@@ -348,7 +386,7 @@ export class Dragable {
                     continue;
                 }
                 const coords2 = leaves[i].coords;
-                if (typeToType[this.componentType][leaves[i].componentType] && isColiding(this.coords, coords2)) {
+                if (canAttach(this.componentType, leaves[i].componentType) && isColiding(this.coords, coords2)) {
                     leaves[i].appendChild(this);
                     this.adjustCoords(leaves[i].coords.x1, leaves[i].coords.x1 + this.coords.width,
                         leaves[i].coords.y2, leaves[i].coords.y2 + this.coords.height, true);

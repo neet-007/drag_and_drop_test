@@ -3,10 +3,10 @@ import { componentsArray, Dragable, init } from "./elemnts.js"
 init();
 
 const typeToColor = {
-    "a": "blue",
-    "b": "red",
-    "c": "yellow",
-    "d": "black",
+    0: "blue",
+    1: "red",
+    2: "yellow",
+    3: "black",
 }
 
 /**@type {Dragable[]}*/
