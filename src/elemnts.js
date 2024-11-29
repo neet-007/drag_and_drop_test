@@ -143,23 +143,46 @@ export class Dragable {
     }
 
     removeChild() {
-        //console.log(this)
         if (!this.next) return;
         this.next.prev = null;
         this.next = null;
+        this.isLeaf = true;
         removeElem(parents, this);
+        leaves.push(this);
     }
 
     removeElement() {
-        if (this.prev) {
-            this.prev.removeChild();
+        /**@type {Dragable}*/
+        let curr = this;
+
+        while (curr.next !== null) {
+            curr = curr.next;
         }
-        dropDiv.removeChild(this.elem);
+
+        while (curr !== this && curr !== null) {
+            if (curr.isLeaf) {
+                removeElem(leaves, curr);
+            } else if (!curr.firstTime) {
+                removeElem(parents, curr);
+            }
+
+            dropDiv.removeChild(curr.elem);
+            curr.prev.next = null;
+            curr = curr.prev;
+        }
         if (this.isLeaf) {
             removeElem(leaves, this);
-        } else if (!this.firstTime) {
+        } else if (!curr.firstTime) {
             removeElem(parents, this);
         }
+
+        if (this.prev !== null) {
+            this.prev.next = null;
+            removeElem(parents, this.prev);
+            leaves.push(this.prev);
+        }
+
+        dropDiv.removeChild(this.elem);
     }
 
     init() {
@@ -191,27 +214,30 @@ export class Dragable {
     }
 
     /**
-    * @param {MouseEvent} event 
-    */
-    dragMove(event) {
-        if (this.isBase) {
-            return;
-        }
-
-        this.elem.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
+     *@param {number} x1 
+     *@param {number} x2 
+     *@param {number} y1 
+     *@param {number} y2 
+     @param {boolean} [transform=false] 
+     * */
+    adjustCoords(x1, x2, y1, y2, transform = false) {
         this.coords = {
             ...this.coords,
-            x1: event.clientX,
-            x2: event.clientX + this.coords.width,
-            y1: event.clientY,
-            y2: event.clientY + this.coords.height,
+            x1: x1,
+            x2: x2,
+            y1: y1,
+            y2: y2,
+        }
+        if (transform) {
+            this.elem.style.transform = `translate(${x1}px, ${y1}px)`;
         }
         /**@type {Dragable}*/
         let parent = this;
         let curr = this.next;
         while (curr !== null) {
-            console.log(parent.coords)
-            curr.elem.style.transform = `translate(${parent.coords.x1}px, ${parent.coords.y2}px)`;
+            if (transform) {
+                curr.elem.style.transform = `translate(${parent.coords.x1}px, ${parent.coords.y2}px)`;
+            }
             curr.coords = {
                 ...curr.coords,
                 x1: parent.coords.x1,
@@ -227,90 +253,94 @@ export class Dragable {
     /**
     * @param {MouseEvent} event 
     */
+    dragMove(event) {
+        if (this.isBase) {
+            return;
+        }
+
+        this.elem.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
+        this.adjustCoords(event.clientX, event.clientX + this.coords.width,
+            event.clientY, event.clientY + this.coords.height, true);
+    }
+
+    /**
+    * @param {MouseEvent} event 
+    */
     dragEnd(event) {
         handling = false;
-
-        this.coords = {
-            ...this.coords,
-            x1: event.clientX,
-            x2: event.clientX + this.coords.width,
-            y1: event.clientY,
-            y2: event.clientY + this.coords.height,
-        }
-
-        /**@type {Dragable}*/
-        let parent = this;
-        let curr = this.next;
-        while (curr !== null) {
-            curr.coords = {
-                ...curr.coords,
-                x1: parent.coords.x1,
-                x2: parent.coords.x1 + curr.coords.width,
-                y1: parent.coords.y2,
-                y2: parent.coords.y2 + curr.coords.height,
-            }
-            parent = curr;
-            curr = curr.next;
-        }
 
         if (this.isBase) {
             return;
         }
 
+        this.adjustCoords(event.clientX, event.clientX + this.coords.width,
+            event.clientY, event.clientY + this.coords.height);
+
+        console.log("parents", [...parents])
+        console.log("leavse", [...leaves]);
         if (!isSurrounding(this.coords, dropDivCoords)) {
-            let curr = this.next;
-            while (curr !== null) {
-                curr.removeElement();
-                curr = curr.next;
-            }
             this.removeElement();
+            console.log("parents", [...parents])
+            console.log("leavse", [...leaves]);
         } else {
             if (this.prev !== null) {
                 if (!isColiding(this.coords, this.prev.coords)) {
                     this.prev.removeChild();
                 } else {
-                    this.elem.style.transform = `translate(${this.prev.coords.x1}px, ${this.prev.coords.y2}px)`;
+                    console.log("parents", [...parents])
+                    console.log("leavse", [...leaves]);
+                    this.adjustCoords(this.prev.coords.x1, this.prev.coords.x1 + this.coords.width,
+                        this.prev.coords.y2, this.prev.coords.y2 + this.coords.height, true);
+
+                    document.removeEventListener("pointermove", this.dragMove);
+                    document.removeEventListener("pointerup", this.dragEnd);
+
+                    console.log("parents", [...parents])
+                    console.log("leavse", [...leaves]);
+                    return;
                 }
             }
-            else {
-                let colloed = false;
-                for (let i = 0; i < leaves.length; i++) {
-                    if (this === leaves[i] || this.next === leaves[i]) {
-                        continue;
-                    }
-                    const coords2 = leaves[i].coords;
-                    if (isColiding(this.coords, coords2)) {
-                        leaves[i].appendChild(this);
-                        this.elem.style.transform = `translate(${leaves[i].coords.x1}px, ${leaves[i].coords.y2}px)`;
-                        parents.push(leaves[i]);
-                        leaves[i].isLeaf = false;
-                        leaves.splice(i, 1);
-                        colloed = true;
-                        break;
-                    } else {
-                        console.log("elem", this.coords);
-                        console.log("failed with", coords2);
-                    }
+            let colloed = false;
+            for (let i = 0; i < leaves.length; i++) {
+                if (this === leaves[i] || this.next === leaves[i]) {
+                    continue;
                 }
+                const coords2 = leaves[i].coords;
+                if (isColiding(this.coords, coords2)) {
+                    leaves[i].appendChild(this);
+                    this.adjustCoords(leaves[i].coords.x1, leaves[i].coords.x1 + this.coords.width,
+                        leaves[i].coords.y2, leaves[i].coords.y2 + this.coords.height, true);
 
-                if (!colloed) {
-                    this.elem.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
+                    parents.push(leaves[i]);
+                    leaves[i].isLeaf = false;
+                    leaves.splice(i, 1);
+                    colloed = true;
+                    break;
                 }
+            }
 
-                if (!this.isLeaf && this.next === null) {
-                    leaves.push(this);
-                    this.isLeaf = true;
-                }
+            if (!colloed) {
+                this.elem.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
+                this.adjustCoords(event.clientX, event.clientX + this.coords.width,
+                    event.clientY, event.clientY + this.coords.height, true);
+            }
 
-                if (this.firstTime) {
-                    this.firstTime = false;
-                    this.isLeaf = true;
-                }
+            if (!this.isLeaf && this.next === null) {
+                leaves.push(this);
+                this.isLeaf = true;
+            }
+
+            if (this.firstTime) {
+                this.firstTime = false;
+                this.isLeaf = true;
             }
         }
 
         document.removeEventListener("pointermove", this.dragMove);
         document.removeEventListener("pointerup", this.dragEnd);
+
+        console.log("parents", [...parents])
+        console.log("leavse", [...leaves]);
     }
 }
 
