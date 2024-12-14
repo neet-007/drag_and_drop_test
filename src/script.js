@@ -1,4 +1,4 @@
-import { componentsArray, Dragable, init } from "./elemnts.js"
+import { DragableTopBottom, init, componentsArray } from "./elementTopBottom.js";
 
 init();
 
@@ -9,10 +9,10 @@ const typeToColor = {
     3: "black",
 }
 
-/**@type {Dragable[]}*/
+/**@type {DragableTopBottom[]}*/
 const bases = Array(componentsArray.length);
 for (let i = 0; i < componentsArray.length; i++) {
-    bases[i] = new Dragable("odd", componentsArray[i], null, null, typeToColor[componentsArray[i]], true);
+    bases[i] = new DragableTopBottom("odd", componentsArray[i], null, null, typeToColor[componentsArray[i]], true);
 }
 
 

@@ -1,5 +1,4 @@
 import { isColiding, isColidingOffset, isSurrounding } from "./collision.js";
-import { containerDiv, dropDiv, dropDivCoords } from "./elemnts.js";
 
 /**@constant @type{number}**/
 const ATTACH_OFFSET = 5;
@@ -27,6 +26,44 @@ function canAttach(parentType, childType) {
     const parentBits = typeToType1[parentType];
     const childBit = 1 << childType;
     return (parentBits & childBit) !== 0;
+}
+
+const root = document.getElementById("root");
+
+export const dropDiv = document.createElement("div");
+dropDiv.id = "dropDiv";
+dropDiv.style.width = "700px";
+dropDiv.style.height = "1000px";
+dropDiv.style.background = "gray";
+dropDiv.style.border = "1px solid black";
+
+/**@type {Coordinates}*/
+export const dropDivCoords = {
+    x1: 0,
+    x2: 0,
+    y1: 0,
+    y2: 0,
+    height: 0,
+    width: 0,
+};
+
+export const containerDiv = document.createElement("div");
+containerDiv.id = "containerDiv";
+containerDiv.style.width = "400px";
+containerDiv.style.height = "1000px";
+containerDiv.style.background = "white";
+containerDiv.style.border = "1px solid black";
+
+export function init() {
+    root.appendChild(containerDiv);
+    root.appendChild(dropDiv);
+    const rect = dropDiv.getBoundingClientRect();
+    dropDivCoords.x1 = rect.x
+    dropDivCoords.x2 = rect.x + rect.width;
+    dropDivCoords.y1 = rect.y
+    dropDivCoords.y2 = rect.x + rect.height;
+    dropDivCoords.height = rect.height;
+    dropDivCoords.width = rect.width;
 }
 
 
@@ -65,7 +102,7 @@ class DragableTopBottomList {
         let curr = this.head;
         let x2 = this.head.coords.x2;
         let max = this.head.coords.width;
-        let heigth = 0;
+        let heigth = curr.coords.height;
 
         while (curr.next !== null) {
             if (curr.coords.width > max) {
@@ -77,46 +114,53 @@ class DragableTopBottomList {
             curr = curr.next;
         }
 
-        this.coords.width = max;
-        this.coords.height = heigth;
-        this.coords.x2 = x2;
+        this.coords = {
+            ...this.head.coords,
+            width: max,
+            height: heigth,
+            x2: x2,
+        }
 
         this.tail = curr;
+        this.head.list = this;
     }
 
     /**
      *@param {DragableTopBottom} dragable
-     @returns {boolean}
+     @returns {DragableTopBottom | null}
      * **/
     compare(dragable) {
         if (this.head === null) {
-            return false;
+            return null;
         }
 
         let curr = this.head;
+        /*
         const dragableTop = dragable.projectCoords("top");
         const dragableBottom = dragable.projectCoords("bottom");
         let currTop = curr.projectCoords("top");
         let currBottom = curr.projectCoords("bottom");
+        */
         while (curr != null) {
-            if (isColidingOffset(dragableTop.x1, dragableTop.y2, currTop.x1, currTop.y2, ATTACH_OFFSET)) {
-
-                return true;
+            if (isColiding(dragable.coords, curr.coords)) {
+                return curr;
             }
-            if (isColidingOffset(currBottom.x1, currBottom.y2, dragableBottom.x1, dragableBottom.y2, ATTACH_OFFSET)) {
-                return true;
+            /*
+            if (isColidingOffset(currTop.x1, currTop.y2, dragableBottom.x1, dragableBottom.y2, ATTACH_OFFSET)) {
+                return curr;
             }
+            */
             curr = curr.next;
         }
 
-        return false;
+        return null;
     }
 
     /**
-     *@param {DragableTopBottom} parent
+     *@param {DragableTopBottom} parent 
      *@param {DragableTopBottom} child
      * **/
-    append(parent, child) {
+    attach(parent, child) {
         parent.next = child;
         child.prev = parent;
         if (this.tail === parent) {
@@ -128,12 +172,15 @@ class DragableTopBottomList {
         }
         this.coords.height += child.coords.height;
         this.coords.y2 = child.coords.y2;
+        child.list = this;
+
     }
 
     /**
      *@param {DragableTopBottom} dragable
+     *@param {boolean} [removeElemnt=false] 
      * **/
-    delete(dragable) {
+    delete(dragable, removeElemnt = false) {
         if (dragable.prev !== null) {
             dragable.prev.next = dragable.next;
         }
@@ -153,7 +200,12 @@ class DragableTopBottomList {
             this.updateWidth();
         }
 
+        if (removeElemnt) {
+            //!TODO remove elemnt
+            return;
+        }
         lists.push(new DragableTopBottomList(dragable));
+        dragable.list = lists[lists.length - 1];
     }
 
     updateWidth() {
@@ -178,6 +230,9 @@ export class DragableTopBottom {
 
     /**@type {HTMLDivElement | null}*/
     elem = null;
+
+    /**@type {DragableTopBottomList | null}*/
+    list = null;
 
     /**@type {boolean}*/
     isLeaf = false;
@@ -207,6 +262,7 @@ export class DragableTopBottom {
         this.componentType = componentType;
         this.prev = prev;
         this.next = next;
+        this.list = null;
         this.color = color;
         this.isBase = isBase;
         this.isLeaf = false;
@@ -221,8 +277,6 @@ export class DragableTopBottom {
         };
 
         this.init = this.init.bind(this);
-        this.appendChild = this.appendChild.bind(this);
-        this.removeChild = this.removeChild.bind(this);
         this.dragStart = this.dragStart.bind(this);
         this.dragMove = this.dragMove.bind(this);
         this.dragEnd = this.dragEnd.bind(this);
@@ -246,67 +300,6 @@ export class DragableTopBottom {
         }
 
         this.elem = elem;
-    }
-
-    /**
-     *@param {DragableTopBottom} child 
-    */
-    appendChild(child) {
-        if (this.isBase) {
-            return;
-        }
-        child.prev = this;
-        this.next = child;
-        child.coords = {
-            ...child.coords,
-            x1: this.coords.x1,
-            x2: this.coords.x1 + child.coords.width,
-            y1: this.coords.y2,
-            y2: this.coords.y2 + child.coords.height
-        }
-    }
-
-    removeChild() {
-        if (!this.next) return;
-        this.next.prev = null;
-        this.next = null;
-        this.isLeaf = true;
-        removeElem(parents, this);
-        leaves.push(this);
-    }
-
-    removeElement() {
-        /**@type {DragableTopBottom}*/
-        let curr = this;
-
-        while (curr.next !== null) {
-            curr = curr.next;
-        }
-
-        while (curr !== this && curr !== null) {
-            if (curr.isLeaf) {
-                removeElem(leaves, curr);
-            } else if (!curr.firstTime) {
-                removeElem(parents, curr);
-            }
-
-            dropDiv.removeChild(curr.elem);
-            curr.prev.next = null;
-            curr = curr.prev;
-        }
-        if (this.isLeaf) {
-            removeElem(leaves, this);
-        } else if (!curr.firstTime) {
-            removeElem(parents, this);
-        }
-
-        if (this.prev !== null) {
-            this.prev.next = null;
-            removeElem(parents, this.prev);
-            leaves.push(this.prev);
-        }
-
-        dropDiv.removeChild(this.elem);
     }
 
     init() {
@@ -425,28 +418,36 @@ export class DragableTopBottom {
     dragEnd(event) {
         handling = false;
 
+        if (this.isBase) {
+            return;
+        }
         /**@type {DragableTopBottom}*/
         let curr = this;
         while (curr !== null) {
             curr.elem.style.zIndex = "0";
             curr = curr.next;
         }
-        if (this.isBase) {
-            return;
-        }
 
         this.adjustCoords(event.clientX, event.clientX + this.coords.width,
             event.clientY, event.clientY + this.coords.height);
 
         if (!isSurrounding(this.coords, dropDivCoords)) {
-            this.removeElement();
+            if (this.firstTime) {
+                dropDiv.removeChild(this.elem)
+            } else {
+                this.list.delete(this, true);
+            }
         } else {
-            if (this.prev !== null) {
-                if (!isColiding(this.coords, this.prev.coords)) {
-                    this.prev.removeChild();
+            if (this.list !== null) {
+                if (!isColiding(this.coords, this.list.coords)) {
+                    this.list.delete(this, false);
                 } else {
-                    this.adjustCoords(this.prev.coords.x1, this.prev.coords.x1 + this.coords.width,
-                        this.prev.coords.y2, this.prev.coords.y2 + this.coords.height, true);
+                    const comp = this.list.compare(this);
+                    if (comp === null) {
+                        throw new Error("this should not me null")
+                    }
+
+                    this.list.attach(this, comp);
 
                     document.removeEventListener("pointermove", this.dragMove);
                     document.removeEventListener("pointerup", this.dragEnd);
@@ -455,23 +456,28 @@ export class DragableTopBottom {
                 }
             }
 
-            let colloed = false;
+            this.firstTime = false;
+            let collided = false;
             for (let i = 0; i < lists.length; i++) {
                 const coords2 = lists[i].coords;
                 if (isColiding(this.coords, coords2)) {
-                    if (lists[i].compare(this)) {
-                        colloed = true;
+                    const comp = lists[i].compare(this)
+                    if (comp !== null) {
+                        collided = true;
+                        lists[i].attach(comp, this);
+                        console.log(lists[i]);
                         break;
                     }
                 }
             }
 
-            if (!colloed) {
+            if (!collided) {
                 this.elem.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
                 this.adjustCoords(event.clientX, event.clientX + this.coords.width,
                     event.clientY, event.clientY + this.coords.height, true);
+                lists.push(new DragableTopBottomList(this));
+                console.log(lists);
             }
-
         }
 
         document.removeEventListener("pointermove", this.dragMove);
