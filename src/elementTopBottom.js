@@ -182,15 +182,18 @@ class DragableTopBottomList {
      * **/
     delete(dragable, removeElemnt = false) {
         if (dragable.prev !== null) {
+            console.log(dragable.prev);
             dragable.prev.next = dragable.next;
         }
         if (dragable.next !== null) {
+            console.log(dragable.next);
             dragable.next.prev = dragable.prev;
         }
         if (dragable === this.head) {
             if (dragable.next === null) {
                 //! TODO delete
                 removeElem(lists, this);
+                return;
             }
             this.head = dragable.next;
         }
@@ -209,10 +212,10 @@ class DragableTopBottomList {
     }
 
     updateWidth() {
-        let curr = this.head.next;
+        let curr = this.head;
         let x2 = this.head.coords.x2;
         let max = this.head.coords.width
-        while (curr.next !== null) {
+        while (curr !== null) {
             if (curr.coords.width > max) {
                 max = curr.coords.width;
             }
@@ -447,13 +450,14 @@ export class DragableTopBottom {
                         throw new Error("this should not me null")
                     }
 
-                    this.list.attach(this, comp);
-
-                    document.removeEventListener("pointermove", this.dragMove);
-                    document.removeEventListener("pointerup", this.dragEnd);
-
-                    return;
+                    if (comp !== this) {
+                        this.list.attach(this, comp);
+                    }
                 }
+                document.removeEventListener("pointermove", this.dragMove);
+                document.removeEventListener("pointerup", this.dragEnd);
+
+                return;
             }
 
             this.firstTime = false;
@@ -476,7 +480,6 @@ export class DragableTopBottom {
                 this.adjustCoords(event.clientX, event.clientX + this.coords.width,
                     event.clientY, event.clientY + this.coords.height, true);
                 lists.push(new DragableTopBottomList(this));
-                console.log(lists);
             }
         }
 
