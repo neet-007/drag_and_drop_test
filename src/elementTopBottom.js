@@ -157,10 +157,25 @@ class DragableTopBottomList {
     }
 
     /**
+     *@param {number} x 
+     *@param {number} y 
+     * */
+    adjustCoords(x, y) {
+        this.coords.x1 = x;
+        this.coords.x2 = x + this.coords.width;
+        this.coords.y1 = y;
+        this.coords.y2 = y + this.coords.height;
+    }
+
+    /**
      *@param {DragableTopBottom} parent 
      *@param {DragableTopBottom} child
      * **/
     attach(parent, child) {
+        console.log("pre attach", [...lists]);
+        if (child.list !== null) {
+            removeElem(lists, child.list);
+        }
         parent.next = child;
         child.prev = parent;
         if (this.tail === parent) {
@@ -173,7 +188,7 @@ class DragableTopBottomList {
         this.coords.height += child.coords.height;
         this.coords.y2 = child.coords.y2;
         child.list = this;
-
+        console.log("post attach", [...lists]);
     }
 
     /**
@@ -181,22 +196,22 @@ class DragableTopBottomList {
      *@param {boolean} [removeElemnt=false] 
      * **/
     delete(dragable, removeElemnt = false) {
+        console.log("pre delete", [...lists]);
         if (dragable.prev !== null) {
-            console.log(dragable.prev);
-            dragable.prev.next = dragable.next;
+            dragable.prev.next = null;
         }
-        if (dragable.next !== null) {
-            console.log(dragable.next);
-            dragable.next.prev = dragable.prev;
-        }
+        dragable.prev = null;
+
         if (dragable === this.head) {
             if (dragable.next === null) {
                 //! TODO delete
                 removeElem(lists, this);
+                console.log("post delete", [...lists]);
                 return;
             }
             this.head = dragable.next;
         }
+        this.tail = dragable.prev;
 
         this.coords.height -= dragable.coords.height;
         if (dragable.coords.width === this.coords.width) {
@@ -205,10 +220,12 @@ class DragableTopBottomList {
 
         if (removeElemnt) {
             //!TODO remove elemnt
+            console.log("post delete", [...lists]);
             return;
         }
         lists.push(new DragableTopBottomList(dragable));
         dragable.list = lists[lists.length - 1];
+        console.log("post delete", [...lists]);
     }
 
     updateWidth() {
@@ -258,9 +275,8 @@ export class DragableTopBottom {
      *@param {DragableTopBottom| null} next
      *@param {string} color
      *@param {boolean} isBase
-     *@param {boolean} firstTime
      */
-    constructor(type, componentType, prev, next, color, isBase = false, firstTime = false) {
+    constructor(type, componentType, prev, next, color, isBase = false) {
         this.type = type;
         this.componentType = componentType;
         this.prev = prev;
@@ -269,7 +285,6 @@ export class DragableTopBottom {
         this.color = color;
         this.isBase = isBase;
         this.isLeaf = false;
-        this.firstTime = firstTime;
         this.coords = {
             x1: 0,
             x2: 0,
@@ -311,7 +326,7 @@ export class DragableTopBottom {
         }
 
         const rect = this.elem.getBoundingClientRect();
-        const clone = new DragableTopBottom(this.type, this.componentType, null, null, this.color, false, true);
+        const clone = new DragableTopBottom(this.type, this.componentType, null, null, this.color, false);
         dropDiv.appendChild(clone.elem);
         clone.coords.x1 = rect.x;
         clone.coords.y1 = rect.y;
@@ -434,14 +449,18 @@ export class DragableTopBottom {
         this.adjustCoords(event.clientX, event.clientX + this.coords.width,
             event.clientY, event.clientY + this.coords.height);
 
+        if (this.list !== null && this.list.head === this) {
+            this.list.adjustCoords(event.clientX, event.y)
+        }
+
         if (!isSurrounding(this.coords, dropDivCoords)) {
-            if (this.firstTime) {
+            if (this.list === null) {
                 dropDiv.removeChild(this.elem)
             } else {
                 this.list.delete(this, true);
             }
         } else {
-            if (this.list !== null) {
+            if (this.list !== null && this.list.head !== this) {
                 if (!isColiding(this.coords, this.list.coords)) {
                     this.list.delete(this, false);
                 } else {
@@ -450,32 +469,28 @@ export class DragableTopBottom {
                         throw new Error("this should not me null")
                     }
 
-                    if (comp !== this) {
-                        this.list.attach(this, comp);
-                    }
-                }
-                document.removeEventListener("pointermove", this.dragMove);
-                document.removeEventListener("pointerup", this.dragEnd);
+                    this.list.attach(this, comp);
+                    document.removeEventListener("pointermove", this.dragMove);
+                    document.removeEventListener("pointerup", this.dragEnd);
 
-                return;
+                    return;
+                }
             }
 
-            this.firstTime = false;
             let collided = false;
             for (let i = 0; i < lists.length; i++) {
                 const coords2 = lists[i].coords;
                 if (isColiding(this.coords, coords2)) {
                     const comp = lists[i].compare(this)
-                    if (comp !== null) {
+                    if (comp !== null && comp !== this) {
                         collided = true;
                         lists[i].attach(comp, this);
-                        console.log(lists[i]);
                         break;
                     }
                 }
             }
 
-            if (!collided) {
+            if (!collided && this.list === null) {
                 this.elem.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
                 this.adjustCoords(event.clientX, event.clientX + this.coords.width,
                     event.clientY, event.clientY + this.coords.height, true);
